@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>鯊魚抽獎小遊戲</title>
+
+<style>
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.6s;
+    background: #f0f8ff;
+    overflow: hidden;
+}
+
+.container {
+    text-align: center;
+    position: relative;
+    z-index: 1;
+}
+
+button {
+    padding: 14px 30px;
+    font-size: 20px;
+    cursor: pointer;
+    border-radius: 8px;
+    border: none;
+    background: #0078d7;
+    color: white;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+    margin: 8px;
+}
+button:hover { background: #005fa3; }
+
+#result {
+    margin-top: 16px;
+    font-size: 22px;
+    min-height: 30px;
+}
+
+#shark-area {
+    margin-top: 20px;
+    min-height: 220px;
+}
+
+.hidden { display: none; }
+
+/* ===== 背景影片 ===== */
+.bg-video {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    object-fit: cover;
+    z-index: -1;
+    opacity: 0.6;
+}
+
+/* ===== 抽獎畫面按鈕橘色 ===== */
+#draw-screen button { background: orange; }
+#draw-screen button:hover { background: darkorange; }
+
+/* ===== 動畫 ===== */
+.spin3s { animation: spin 1.8s linear infinite; }
+@keyframes spin { from {transform:rotate(0)} to {transform:rotate(360deg)} }
+
+/* 結果跳動 */
+@keyframes pop {
+  0%{transform:scale(0.7);}
+  60%{transform:scale(1.2);}
+  100%{transform:scale(1);}
+}
+.pop { animation: pop 0.6s ease; }
+
+/* 白光閃 */
+.flash {
+ position:fixed;
+ top:0;left:0;
+ width:100%;height:100%;
+ background:white;
+ opacity:0;
+ pointer-events:none;
+ z-index:5;
+}
+.flash.show { animation: flashAnim 0.5s; }
+@keyframes flashAnim {
+  0%{opacity:0}
+  50%{opacity:0.9}
+  100%{opacity:0}
+}
+
+/* 進度條 */
+#barBox{
+ width:200px;
+ height:8px;
+ background:#ddd;
+ border-radius:5px;
+ margin:10px auto;
+ overflow:hidden;
+}
+#bar{
+ height:100%;
+ width:0%;
+ background:orange;
+}
+
+/* 彩帶 */
+.confetti{
+ position:fixed;
+ width:8px;
+ height:14px;
+ top:-20px;
+ animation:fall 3s linear forwards;
+}
+@keyframes fall{
+ to{ transform:translateY(110vh) rotate(720deg);}
+}
+</style>
+</head>
+
+<body>
+
+<div id="flash" class="flash"></div>
+
+<video id="bg-video-home" class="bg-video" autoplay muted loop playsinline></video>
+<video id="bg-video-draw" class="bg-video hidden" autoplay muted loop playsinline></video>
+
+<div class="container">
+
+<div id="home-screen">
+<h1>萍萍的 情人節禮物❤️</h1>
+<p>一天只能抽一次喔🦈</p>
+<p>記得錄影唷!</p>
+<button id="startBtn" onclick="startDraw()">開始抽獎</button>
+</div>
+
+<div id="draw-screen" class="hidden">
+<div id="shark-area"></div>
+<div id="barBox" class="hidden"><div id="bar"></div></div>
+<div id="result"></div>
+<button onclick="goHome()">返回主畫面</button>
+</div>
+
+</div>
+
+<script>
+let mode="home";
+let lock=false;
+
+/* ===== 影片 ===== */
+const homeVideos = [
+    { src: "videos/sunny.mp4", weight: 1 }, // 出現機率低
+    { src: "videos/shark1.mp4", weight: 5 },
+    { src: "videos/shark2.mp4", weight: 5 },
+    { src: "videos/shark3.mp4", weight: 5 },
+    { src: "videos/shark4.mp4", weight: 5 },
+    { src: "videos/shark5.mp4", weight: 5 },
+    { src: "videos/shark6.mp4", weight: 5 },
+    { src: "videos/shark7.mp4", weight: 5 }
+];
+
+/* ===== 抽獎畫面影片 ===== */
+const drawVideos = [
+    { src: "videos/sunny.mp4", weight: 1 }, // 出現機率低
+    { src: "videos/nh1.mp4", weight: 5 },
+    { src: "videos/nh2.mp4", weight: 5 },
+    { src: "videos/nh3.mp4", weight: 5 },
+    { src: "videos/nh4.mp4", weight: 5 },
+    { src: "videos/nh5.mp4", weight: 5 },
+    { src: "videos/nh6.mp4", weight: 5 },
+    { src: "videos/nh7.mp4", weight: 5 },
+    { src: "videos/nh8.mp4", weight: 5 },
+    { src: "videos/nh9.mp4", weight: 5 },
+    { src: "videos/nh10.mp4", weight: 5 },
+    { src: "videos/nh11.mp4", weight: 5 },
+    { src: "videos/nh12.mp4", weight: 5 },
+    { src: "videos/nh13.mp4", weight: 5 },
+];
+
+/* ===== 加權隨機影片 ===== */
+function randomVideo(id,list){
+ let v=document.getElementById(id);
+ let t=list.reduce((s,x)=>s+x.weight,0);
+ let r=Math.random()*t;
+ for(let x of list){ if(r<x.weight){v.src=x.src;return;} r-=x.weight;}
+}
+
+/* ===== 開始抽獎 ===== */
+function startDraw(){
+ if(lock) return;
+ lock=true;
+
+ document.getElementById("home-screen").classList.add("hidden");
+ document.getElementById("draw-screen").classList.remove("hidden");
+
+ // 旋轉期間先隱藏背景影片
+ document.getElementById("bg-video-home").classList.add("hidden");
+ document.getElementById("bg-video-draw").classList.add("hidden");
+
+ showSpin();
+}
+
+/* ===== 旋轉階段 ===== */
+function showSpin(){
+ const area=document.getElementById("shark-area");
+ const result=document.getElementById("result");
+ const barBox=document.getElementById("barBox");
+ const bar=document.getElementById("bar");
+
+ result.textContent="抽獎中...";
+ area.innerHTML=`<img src="images/spin.png" width="260" class="spin3s">`;
+ barBox.classList.remove("hidden");
+ bar.style.width="0%";
+
+ let p=0;
+ let timer=setInterval(()=>{
+  p+=3;
+  bar.style.width=p+"%";
+ },90);
+
+ setTimeout(()=>{
+  clearInterval(timer);
+  barBox.classList.add("hidden");
+
+  // 旋轉結束才顯示抽獎背景影片
+  document.getElementById("bg-video-draw").classList.remove("hidden");
+  randomVideo("bg-video-draw", drawVideos);
+
+  showResult();
+ },3000);
+}
+
+/* ===== 白光 ===== */
+function flash(){
+ const f=document.getElementById("flash");
+ f.classList.add("show");
+ setTimeout(()=>f.classList.remove("show"),500);
+}
+
+/* ===== 彩帶 ===== */
+function confetti(){
+ for(let i=0;i<40;i++){
+  let c=document.createElement("div");
+  c.className="confetti";
+  c.style.left=Math.random()*100+"%";
+  c.style.background=`hsl(${Math.random()*360},80%,60%)`;
+  document.body.appendChild(c);
+  setTimeout(()=>c.remove(),3000);
+ }
+}
+
+/* ===== 顯示結果 ===== */
+function showResult(){
+ flash();
+ const area=document.getElementById("shark-area");
+ const result=document.getElementById("result");
+
+ // 結果文字
+ const win=Math.random()<0.5;
+
+ // **結果階段不顯示旋轉圖片**
+ area.innerHTML = "";
+
+ result.className="pop";
+ result.textContent= win ? "🎉 恭喜中獎！ 可以抽一格" : "😢 沒中獎，明天再接再厲～";
+ result.style.color= win?"green":"red";
+
+ if(win) confetti();
+
+ lock=false;
+}
+
+/* ===== 返回主畫面 ===== */
+function goHome(){
+ document.getElementById("home-screen").classList.remove("hidden");
+ document.getElementById("draw-screen").classList.add("hidden");
+ document.getElementById("bg-video-draw").classList.add("hidden");
+ document.getElementById("bg-video-home").classList.remove("hidden");
+ randomVideo("bg-video-home",homeVideos);
+ document.getElementById("shark-area").innerHTML="";
+ document.getElementById("result").textContent="";
+ lock=false;
+}
+
+window.onload=()=>randomVideo("bg-video-home",homeVideos);
+</script>
+
+</body>
+</html>
